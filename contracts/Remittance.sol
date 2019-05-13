@@ -1,8 +1,11 @@
 pragma solidity ^0.5.0;
 
-import "./Destroyable.sol";
+import {Destroyable} from "./Destroyable.sol";
+import {SafeMath} from "./SafeMath.sol";
 
 contract Remittance is Destroyable {
+
+    using SafeMath for uint256;
 
     /*
      * State Variables
@@ -66,8 +69,8 @@ contract Remittance is Destroyable {
         fxTransfer memory newTransfer;
         newTransfer._sender = msg.sender;
         newTransfer._exchange = exchange;
-        newTransfer._amount = msg.value - 10;               // ADJUST FEE
-        newTransfer._deadline = block.number + deadline;
+        newTransfer._amount = msg.value.sub(10);         // ESTIMATE & ADJUST FEE
+        newTransfer._deadline = block.number.add(deadline);
         newTransfer._puzzleHash = puzzleHash;
 
         transferCounter++;
@@ -81,7 +84,7 @@ contract Remittance is Destroyable {
         require(msg.sender == transaction._exchange, "");
         bytes32 hashValue = keccak256(abi.encodePacked(secret));
         require(hashValue == transaction._puzzleHash, "");
-        balances[msg.sender] += transaction._amount;
+        balances[msg.sender] = balances[msg.sender].add(transaction._amount);
         delete transferList[id];
         emit LogTransferCompleted(id);
     }
@@ -90,7 +93,7 @@ contract Remittance is Destroyable {
         fxTransfer storage transaction = transferList[id];
         require(transaction._sender == msg.sender, "Only the sender can resolve a transfer");
         require(block.number > transaction._deadline, "Transfer deadline has not yet passed");
-        balances[msg.sender] = transaction._amount;
+        balances[msg.sender] = balances[msg.sender].add(transaction._amount);
         delete transferList[id];
         emit LogTransferReverted(id);
     }
