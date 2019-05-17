@@ -13,16 +13,18 @@ contract Remittance is Destroyable {
 
     address private owner;
     uint256 private transferCounter = 0;
+    uint256 private FEE = 100;  // TODO ESTIMATE & ADJUST FEE
+    uint256 private MAX_DEADLINE = 57600;
 
-    struct fxTransfer {
-        address _sender;
-        address _exchange;
-        uint256 _amount;
-        uint256 _deadline;
-        bytes32 _puzzleHash;
+    struct FxTransfer {
+        address sender;
+        address exchange;
+        uint256 amount;
+        uint256 deadline;
+        bytes32 puzzleHash;
     }
 
-    mapping(uint256 => fxTransfer) public transferList;
+    mapping(uint256 => FxTransfer) public transferList;
     mapping(address => uint256) public balances;
 
 
@@ -30,7 +32,7 @@ contract Remittance is Destroyable {
      * Events
      */
 
-    event LogNewTransfer(address indexed sender, address indexed exchange, uint256 amount, uint256 deadline, uint256 id);
+    event LogNewTransfer(uint256 indexed id, address indexed sender, address indexed exchange, uint256 amount, uint256 deadline);
     event LogTransferCompleted(uint256 indexed id);
     event LogTransferReverted(uint256 indexed id);
     event LogWithdrawal(address indexed user, uint256 amount);
@@ -40,17 +42,12 @@ contract Remittance is Destroyable {
      * General Functions
      */
 
-    constructor() public {
-        owner = msg.sender;
-    }
-
-
     function withdraw() public {
         uint256 amount = balances[msg.sender];
         require(amount > 0, "Balance must be greater than 0");
         balances[msg.sender] = 0;
-        msg.sender.transfer(amount);
         emit LogWithdrawal(msg.sender, amount);
+        msg.sender.transfer(amount);
     }
 
 
@@ -61,39 +58,39 @@ contract Remittance is Destroyable {
     function startTransfer(address exchange, uint256 deadline, bytes32 puzzleHash) public payable returns (uint256) {
         require(exchange != address(0), "Exchange must be non zero address");
         require(exchange != msg.sender, "Sender cannot be exchange");
-
         require(msg.value > 0, "Transfer must be larget than 0");
-        require(deadline <= 57600, "Max deadline is xx blocks => ~14 days");
-        require(puzzleHash.length != 0, "Transfer must include a valid puzzle");
+        require(deadline <= MAX_DEADLINE, "Max deadline is 57600 blocks => ~14 days");
+        // TODO check that deadline is not 0
+        // TODO check that deadline is larger than current block + min
 
-        fxTransfer memory newTransfer;
-        newTransfer._sender = msg.sender;
-        newTransfer._exchange = exchange;
-        newTransfer._amount = msg.value.sub(10);         // ESTIMATE & ADJUST FEE
-        newTransfer._deadline = block.number.add(deadline);
-        newTransfer._puzzleHash = puzzleHash;
+        FxTransfer memory newTransfer;
+        newTransfer.sender = msg.sender;
+        newTransfer.exchange = exchange;
+        newTransfer.amount = msg.value.sub(FEE);
+        newTransfer.deadline = block.number.add(deadline);
+        newTransfer.puzzleHash = puzzleHash;
 
         transferCounter++;
         transferList[transferCounter] = newTransfer;
-        emit LogNewTransfer(msg.sender, exchange, newTransfer._amount, deadline, transferCounter);
+        emit LogNewTransfer(transferCounter, msg.sender, exchange, msg.value.sub(FEE), deadline);
         return transferCounter;
     }
 
     function completeTransfer(uint256 id, string memory secret) public {
-        fxTransfer storage transaction = transferList[id];
-        require(msg.sender == transaction._exchange, "");
+        FxTransfer storage transaction = transferList[id];
+        require(msg.sender == transaction.exchange, "");
         bytes32 hashValue = keccak256(abi.encodePacked(secret));
-        require(hashValue == transaction._puzzleHash, "");
-        balances[msg.sender] = balances[msg.sender].add(transaction._amount);
+        require(hashValue == transaction.puzzleHash, "");
+        balances[msg.sender] = balances[msg.sender].add(transaction.amount);
         delete transferList[id];
         emit LogTransferCompleted(id);
     }
 
     function resolveTransfer(uint256 id) public {
-        fxTransfer storage transaction = transferList[id];
-        require(transaction._sender == msg.sender, "Only the sender can resolve a transfer");
-        require(block.number > transaction._deadline, "Transfer deadline has not yet passed");
-        balances[msg.sender] = balances[msg.sender].add(transaction._amount);
+        FxTransfer storage transaction = transferList[id];
+        require(transaction.sender == msg.sender, "Only the sender can resolve a transfer");
+        require(block.number > transaction.deadline, "Transfer deadline has not yet passed");
+        balances[msg.sender] = balances[msg.sender].add(transaction.amount);
         delete transferList[id];
         emit LogTransferReverted(id);
     }
