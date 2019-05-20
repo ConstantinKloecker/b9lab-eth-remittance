@@ -21,7 +21,7 @@ contract Remittance is Destroyable {
         address exchange;
         uint256 amount;
         uint256 deadline;
-        bytes32 puzzleHash;
+        bytes32 secretHash;
     }
 
     mapping(uint256 => FxTransfer) public transferList;
@@ -55,7 +55,7 @@ contract Remittance is Destroyable {
      * DAPP Logic Functions
      */
 
-    function startTransfer(address exchange, uint256 deadline, bytes32 puzzleHash) public payable returns (uint256) {
+    function startTransfer(address exchange, uint256 deadline, bytes32 secretHash) public payable returns (uint256) {
         require(exchange != address(0), "Exchange must be non zero address");
         require(exchange != msg.sender, "Sender cannot be exchange");
         require(msg.value > 0, "Transfer must be larget than 0");
@@ -68,7 +68,7 @@ contract Remittance is Destroyable {
         newTransfer.exchange = exchange;
         newTransfer.amount = msg.value.sub(FEE);
         newTransfer.deadline = block.number.add(deadline);
-        newTransfer.puzzleHash = puzzleHash;
+        newTransfer.secretHash = secretHash;
 
         transferCounter++;
         transferList[transferCounter] = newTransfer;
@@ -79,8 +79,8 @@ contract Remittance is Destroyable {
     function completeTransfer(uint256 id, string memory secret) public {
         FxTransfer storage transaction = transferList[id];
         require(msg.sender == transaction.exchange, "");
-        bytes32 hashValue = keccak256(abi.encodePacked(secret));
-        require(hashValue == transaction.puzzleHash, "");
+        bytes32 hashValue = createSecretHash(secret);
+        require(hashValue == transaction.secretHash, "");
         balances[msg.sender] = balances[msg.sender].add(transaction.amount);
         delete transferList[id];
         emit LogTransferCompleted(id);
@@ -93,5 +93,9 @@ contract Remittance is Destroyable {
         balances[msg.sender] = balances[msg.sender].add(transaction.amount);
         delete transferList[id];
         emit LogTransferReverted(id);
+    }
+
+    function createSecretHash(string memory puzzle) public pure returns (bytes32) {
+        return keccak256(abi.encode(puzzle));
     }
 }
