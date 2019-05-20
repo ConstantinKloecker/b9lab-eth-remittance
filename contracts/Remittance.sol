@@ -12,19 +12,16 @@ contract Remittance is Destroyable {
      */
 
     address private owner;
-    uint256 private transferCounter = 0;
     uint256 private FEE = 100;  // TODO ESTIMATE & ADJUST FEE
-    uint256 private MAX_DEADLINE = 57600;
+    uint256 constant private MAX_DEADLINE = 57600;  // ~10 days
 
     struct FxTransfer {
         address sender;
-        address exchange;
         uint256 amount;
         uint256 deadline;
-        bytes32 secretHash;
     }
 
-    mapping(uint256 => FxTransfer) public transferList;
+    mapping(bytes32 => FxTransfer) public transferList;
     mapping(address => uint256) public balances;
 
 
@@ -32,9 +29,9 @@ contract Remittance is Destroyable {
      * Events
      */
 
-    event LogNewTransfer(uint256 indexed id, address indexed sender, address indexed exchange, uint256 amount, uint256 deadline);
-    event LogTransferCompleted(uint256 indexed id);
-    event LogTransferReverted(uint256 indexed id);
+    event LogNewTransfer(bytes32 indexed secretHash, address indexed sender, address indexed exchange, uint256 amount, uint256 deadline);
+    event LogTransferCompleted(bytes32 indexed secretHash);
+    event LogTransferReverted(bytes32 indexed secretHash);
     event LogWithdrawal(address indexed user, uint256 amount);
 
 
@@ -55,47 +52,45 @@ contract Remittance is Destroyable {
      * DAPP Logic Functions
      */
 
-    function startTransfer(address exchange, uint256 deadline, bytes32 secretHash) public payable returns (uint256) {
+    function startTransfer(address exchange, uint256 deadline, bytes32 secretHash) public payable returns (bytes32) {
         require(exchange != address(0), "Exchange must be non zero address");
         require(exchange != msg.sender, "Sender cannot be exchange");
-        require(msg.value > 0, "Transfer must be larget than 0");
         require(deadline <= MAX_DEADLINE, "Max deadline is 57600 blocks => ~14 days");
         // TODO check that deadline is not 0
         // TODO check that deadline is larger than current block + min
+        require(transferList[secretHash].sender == address(0), "Secret has already been used");
 
         FxTransfer memory newTransfer;
         newTransfer.sender = msg.sender;
-        newTransfer.exchange = exchange;
         newTransfer.amount = msg.value.sub(FEE);
         newTransfer.deadline = block.number.add(deadline);
-        newTransfer.secretHash = secretHash;
 
-        transferCounter++;
-        transferList[transferCounter] = newTransfer;
-        emit LogNewTransfer(transferCounter, msg.sender, exchange, msg.value.sub(FEE), deadline);
-        return transferCounter;
+        transferList[secretHash] = newTransfer;
+        emit LogNewTransfer(secretHash, msg.sender, exchange, msg.value.sub(FEE), deadline);
+        return secretHash;
     }
 
-    function completeTransfer(uint256 id, string memory secret) public {
-        FxTransfer storage transaction = transferList[id];
-        require(msg.sender == transaction.exchange, "");
-        bytes32 hashValue = createSecretHash(secret);
-        require(hashValue == transaction.secretHash, "");
+    function completeTransfer(bytes32 secretHash, bytes32 secret) public {
+        FxTransfer storage transaction = transferList[secretHash];
+        bytes32 hashValue = createSecretHash(secret, msg.sender);
+        require(hashValue == secretHash, "Secret not valid");
         balances[msg.sender] = balances[msg.sender].add(transaction.amount);
-        delete transferList[id];
-        emit LogTransferCompleted(id);
+        delete transferList[secretHash].amount;
+        delete transferList[secretHash].deadline;
+        emit LogTransferCompleted(secretHash);
     }
 
-    function resolveTransfer(uint256 id) public {
-        FxTransfer storage transaction = transferList[id];
+    function resolveTransfer(bytes32 secretHash) public {
+        FxTransfer storage transaction = transferList[secretHash];
         require(transaction.sender == msg.sender, "Only the sender can resolve a transfer");
         require(block.number > transaction.deadline, "Transfer deadline has not yet passed");
         balances[msg.sender] = balances[msg.sender].add(transaction.amount);
-        delete transferList[id];
-        emit LogTransferReverted(id);
+        delete transferList[secretHash];
+        emit LogTransferReverted(secretHash);
     }
 
-    function createSecretHash(string memory puzzle) public pure returns (bytes32) {
-        return keccak256(abi.encode(puzzle));
+    function createSecretHash(bytes32 secret, address exchange) public view returns (bytes32) {
+        require(exchange != address(0), "Exchange must be non zero address");
+        return keccak256(abi.encode(address(this), secret, exchange));
     }
 }
