@@ -12,8 +12,9 @@ contract Remittance is Destroyable {
      */
 
     address private owner;
-    uint256 private FEE = 100;  // TODO ESTIMATE & ADJUST FEE
+    uint256 constant private FEE = 100;  // TODO ESTIMATE & ADJUST FEE
     uint256 constant private MAX_DEADLINE = 57600;  // ~10 days
+    uint256 constant private MIN_DEADLINE = 5760;   // ~1  day
 
     struct FxTransfer {
         address sender;
@@ -47,17 +48,20 @@ contract Remittance is Destroyable {
         msg.sender.transfer(amount);
     }
 
+    function getFee() public pure returns (uint256) {
+        return FEE;
+    }
+
 
     /*
      * DAPP Logic Functions
      */
 
-    function startTransfer(address exchange, uint256 deadline, bytes32 secretHash) public payable returns (bytes32) {
+    function startTransfer(address exchange, uint256 deadline, bytes32 secretHash) public payable {
         require(exchange != address(0), "Exchange must be non zero address");
         require(exchange != msg.sender, "Sender cannot be exchange");
         require(deadline <= MAX_DEADLINE, "Max deadline is 57600 blocks => ~14 days");
-        // TODO check that deadline is not 0
-        // TODO check that deadline is larger than current block + min
+        require(deadline >= MIN_DEADLINE, "Deadline must be at least 5760 blocks => ~1 day");
         require(transferList[secretHash].sender == address(0), "Secret has already been used");
 
         FxTransfer memory newTransfer;
@@ -66,8 +70,7 @@ contract Remittance is Destroyable {
         newTransfer.deadline = block.number.add(deadline);
 
         transferList[secretHash] = newTransfer;
-        emit LogNewTransfer(secretHash, msg.sender, exchange, msg.value.sub(FEE), deadline);
-        return secretHash;
+        emit LogNewTransfer(secretHash, msg.sender, exchange, msg.value.sub(FEE), block.number.add(deadline));
     }
 
     function completeTransfer(bytes32 secretHash, bytes32 secret) public {
