@@ -5,18 +5,19 @@ import "./Ownable.sol";
 contract Destroyable is Ownable {
 
     uint256 private deadline;
+    uint256 constant public oneDayInBlocks = 5760;
     address payable private beneficiary;
 
-    event LogDestructionInitiated(address indexed admin, uint256 deadline, address beneficiary);
+    event LogDestructionInitiated(address indexed admin, address indexed beneficiary, uint256 deadline);
     event LogDestructionCanceled(address indexed admin);
     event LogDestructionCompleted();
 
     function initiateDestruction(address payable _beneficiary) public onlyOwner {
         require(deadline == 0, "Already initiated");
         require(_beneficiary != address(0), "Beneficiary can not be zero address");
-        deadline = block.number + 5760;  // ~ 1 day
+        deadline = block.number + oneDayInBlocks;  // ~ 1 day
         beneficiary = _beneficiary;
-        emit LogDestructionInitiated(msg.sender, deadline, beneficiary);
+        emit LogDestructionInitiated(msg.sender, beneficiary, deadline);
     }
 
     function cancelDestruction() public onlyOwner {

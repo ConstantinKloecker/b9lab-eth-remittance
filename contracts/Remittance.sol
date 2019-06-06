@@ -12,9 +12,9 @@ contract Remittance is Destroyable {
      */
 
     address private owner;
-    uint256 constant private FEE = 100;  // TODO ESTIMATE & ADJUST FEE
-    uint256 constant private MAX_DEADLINE = 57600;  // ~10 days
-    uint256 constant private MIN_DEADLINE = 5760;   // ~1  day
+    uint256 constant public FEE = 100;  // TODO ESTIMATE & ADJUST FEE
+    uint256 constant public MAX_DEADLINE = 57600;  // ~10 days
+    uint256 constant public MIN_DEADLINE = 5760;   // ~1  day
 
     struct FxTransfer {
         address sender;
