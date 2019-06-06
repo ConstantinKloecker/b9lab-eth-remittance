@@ -1,7 +1,7 @@
 const Remittance = artifacts.require("Remittance");
 const truffleAssert = require("truffle-assertions");
 
-const { toBN, toWei } = web3.utils;
+const { toBN, toWei, asciiToHex } = web3.utils;
 
 contract("Testing main features of Remittance contract", accounts => {
     let instance;
@@ -13,7 +13,7 @@ contract("Testing main features of Remittance contract", accounts => {
     });
 
     it("Users can start a transfer", async () => {
-        let secret = web3.utils.asciiToHex("DoNotShareThisPassword");
+        let secret = asciiToHex("DoNotShareThisPassword");
         let deadline = 6000;
         let amount = 1000;
         let secretHash = await instance.createSecretHash.call(secret, bob, { from: alice });
@@ -34,7 +34,7 @@ contract("Testing main features of Remittance contract", accounts => {
     });
 
     it("Users can not start a transfer with invalid input data", async () => {
-        let secret = web3.utils.asciiToHex("DoNotShareThisPassword");
+        let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
 
         // amount < fee
@@ -70,7 +70,7 @@ contract("Testing main features of Remittance contract", accounts => {
     });
 
     it("User can complete a valid transfer", async () => {
-        let secret = web3.utils.asciiToHex("DoNotShareThisPassword");
+        let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
         await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
         let completion = await instance.completeTransfer(secretHash, secret, { from: carol });
@@ -81,10 +81,10 @@ contract("Testing main features of Remittance contract", accounts => {
     });
 
     it("User can not complete a invalid transfer", async () => {
-        let secret = web3.utils.asciiToHex("DoNotShareThisPassword");
+        let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
         await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
-        let secret2 = web3.utils.asciiToHex("WrongPassword");
+        let secret2 = asciiToHex("WrongPassword");
         await truffleAssert.fails(
             instance.completeTransfer(secretHash, secret2, { from: carol })
         );
@@ -95,7 +95,7 @@ contract("Testing main features of Remittance contract", accounts => {
     // TODO user can not resolve transfer with invalid conditions
 
     it("User can withdraw available balance", async () => {
-        let secret = web3.utils.asciiToHex("DoNotShareThisPassword");
+        let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
         await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
         await instance.completeTransfer(secretHash, secret, { from: carol });
@@ -112,7 +112,7 @@ contract("Testing main features of Remittance contract", accounts => {
     });
 
     it("Secret is hashed correctly", async () => {
-        let secret = web3.utils.asciiToHex("DoNotShareThisPassword");
+        let secret = asciiToHex("DoNotShareThisPassword");
         let hashedSecret1 = await instance.createSecretHash(secret, alice, { from: owner });
         let hashedSecret2 = await instance.createSecretHash(secret, alice, { from: owner });
         assert.equal(hashedSecret1, hashedSecret2, "Secret hash should be deterministic for the same inputs");
