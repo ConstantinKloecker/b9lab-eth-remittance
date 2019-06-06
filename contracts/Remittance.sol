@@ -30,7 +30,7 @@ contract Remittance is Destroyable {
      * Events
      */
 
-    event LogNewTransfer(bytes32 indexed secretHash, address indexed sender, address indexed exchange, uint256 amount, uint256 deadline);
+    event LogNewTransfer(bytes32 indexed secretHash, address indexed sender, uint256 amount, uint256 deadline);
     event LogTransferCompleted(bytes32 indexed secretHash);
     event LogTransferReverted(bytes32 indexed secretHash);
     event LogWithdrawal(address indexed user, uint256 amount);
@@ -57,9 +57,7 @@ contract Remittance is Destroyable {
      * DAPP Logic Functions
      */
 
-    function startTransfer(address exchange, uint256 deadline, bytes32 secretHash) public payable {
-        require(exchange != address(0), "Exchange must be non zero address");
-        require(exchange != msg.sender, "Sender cannot be exchange");
+    function startTransfer(uint256 deadline, bytes32 secretHash) public payable {
         require(deadline <= MAX_DEADLINE, "Max deadline is 57600 blocks => ~14 days");
         require(deadline >= MIN_DEADLINE, "Deadline must be at least 5760 blocks => ~1 day");
         require(transferList[secretHash].sender == address(0), "Secret has already been used");
@@ -70,7 +68,7 @@ contract Remittance is Destroyable {
         newTransfer.deadline = block.number.add(deadline);
 
         transferList[secretHash] = newTransfer;
-        emit LogNewTransfer(secretHash, msg.sender, exchange, msg.value.sub(FEE), block.number.add(deadline));
+        emit LogNewTransfer(secretHash, msg.sender, msg.value.sub(FEE), block.number.add(deadline));
     }
 
     function completeTransfer(bytes32 secretHash, bytes32 secret) public {
