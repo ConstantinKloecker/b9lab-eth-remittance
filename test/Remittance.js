@@ -18,13 +18,13 @@ contract("Testing main features of Remittance contract", accounts => {
         let amount = 1000;
         let secretHash = await instance.createSecretHash.call(secret, bob, { from: alice });
         let fee = await instance.getFee.call({ from: owner });
-        let transfer = await instance.startTransfer(carol, deadline, secretHash, { from: alice, value: amount });
+        let transfer = await instance.startTransfer(deadline, secretHash, { from: alice, value: amount });
         let tx = await web3.eth.getTransaction(transfer.tx);
-        let targetBlock = await tx.blockNumber + deadline;
-        // truffleAssert.eventEmitted(transfer, "LogNewTransfer", (ev) => {
-        //     return ev.secretHash === secretHash && ev.sender === alice && ev.exchange === carol && ev.amount === (amount - fee) && ev.deadline === targetBlock;
-        //     // change value toBn?
-        // });
+        let targetBlock = tx.blockNumber + deadline;
+        assert.equal(transfer.receipt.status, 1, "Transaction should confirm");
+        truffleAssert.eventEmitted(transfer, "LogNewTransfer", (ev) => {
+            return ev.secretHash === secretHash && ev.sender === alice; // && ev.amount === (amount - fee) && ev.deadline === targetBlock;
+        });
 
         let fxTransfer = await instance.transferList(secretHash, { from: owner });
         assert.equal(fxTransfer.sender, alice, "Alice should be the sender in the contract's state");
@@ -39,40 +39,30 @@ contract("Testing main features of Remittance contract", accounts => {
 
         // amount < fee
         await truffleAssert.fails(
-            instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 20 })
+            instance.startTransfer(6000, secretHash, { from: alice, value: 20 })
         );
 
         // deadline below 5760
         await truffleAssert.fails(
-            instance.startTransfer(carol, 5000, secretHash, { from: alice, value: 1000 })
+            instance.startTransfer(5759, secretHash, { from: alice, value: 1000 })
         );
 
         // deadline above 57600
         await truffleAssert.fails(
-            instance.startTransfer(carol, 60000, secretHash, { from: alice, value: 1000 })
-        );
-
-        // exchange == address(0)
-        await truffleAssert.fails(
-            instance.startTransfer(ZERO_ADDRESS, 6000, secretHash, { from: alice, value: 1000 })
-        );
-
-        // exchange == msg.sender
-        await truffleAssert.fails(
-            instance.startTransfer(alice, 6000, secretHash, { from: alice, value: 1000 })
+            instance.startTransfer(57601, secretHash, { from: alice, value: 1000 })
         );
 
         // already existing secret
-        await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
+        await instance.startTransfer(6000, secretHash, { from: alice, value: 1000 });
         await truffleAssert.fails(
-            instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 })
+            instance.startTransfer(6000, secretHash, { from: alice, value: 1000 })
         );
     });
 
     it("User can complete a valid transfer", async () => {
         let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
-        await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
+        await instance.startTransfer(6000, secretHash, { from: alice, value: 1000 });
         let completion = await instance.completeTransfer(secretHash, secret, { from: carol });
         truffleAssert.eventEmitted(completion, "LogTransferCompleted", (ev) => {
             return ev.secretHash === secretHash;
@@ -83,7 +73,7 @@ contract("Testing main features of Remittance contract", accounts => {
     it("User can not complete a invalid transfer", async () => {
         let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
-        await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
+        await instance.startTransfer(6000, secretHash, { from: alice, value: 1000 });
         let secret2 = asciiToHex("WrongPassword");
         await truffleAssert.fails(
             instance.completeTransfer(secretHash, secret2, { from: carol })
@@ -97,7 +87,7 @@ contract("Testing main features of Remittance contract", accounts => {
     it("User can withdraw available balance", async () => {
         let secret = asciiToHex("DoNotShareThisPassword");
         let secretHash = await instance.createSecretHash.call(secret, carol, { from: alice });
-        await instance.startTransfer(carol, 6000, secretHash, { from: alice, value: 1000 });
+        await instance.startTransfer(6000, secretHash, { from: alice, value: 1000 });
         await instance.completeTransfer(secretHash, secret, { from: carol });
         let withdrawal = await instance.withdraw({ from: carol });
         let balance = await instance.balances.call(carol, { from: carol });
